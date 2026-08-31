@@ -9,7 +9,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    contract_version: Literal["1.0"] = "1.0"
+    # 1.1 is additive.  Keep accepting 1.0 envelopes during the rolling
+    # blue/green window so a new consumer can read observations produced by
+    # either runtime without weakening strict field validation.
+    contract_version: Literal["1.0", "1.1"] = "1.1"
 
 
 class CanonicalInboundEnvelope(ContractModel):
@@ -40,6 +43,24 @@ class ConversationObservation(ContractModel):
     extracted_fields: dict[str, Any] = Field(default_factory=dict)
     identified_service_slug: str | None = None
     customer_intent: str | None = None
+    finish_reason: str | None = None
+    output_truncated: bool = False
+    provider_failure_class: Literal[
+        "timeout",
+        "rate_limit",
+        "provider_5xx",
+        "empty_response",
+        "invalid_json",
+        "length",
+        "other",
+    ] | None = None
+    asked_field_keys: tuple[str, ...] = ()
+    prompt_context_manifest: dict[str, Any] = Field(default_factory=dict)
+    prompt_tokens: int | None = Field(default=None, ge=0)
+    completion_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int | None = Field(default=None, ge=0)
+    removed_context: tuple[str, ...] = ()
+    attempt: int = Field(default=1, ge=1)
 
 
 class ConversationDecision(ContractModel):
@@ -90,7 +111,7 @@ class BuildHealth(ContractModel):
     service: str
     source_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
     build_digest: str
-    contracts_version: Literal["1.0.0"] = "1.0.0"
+    contracts_version: Literal["1.0.0", "1.1.0"] = "1.1.0"
     schema_version: int
     required_schema_version: int
     slot: Literal["blue", "green", "unknown"] = "unknown"
